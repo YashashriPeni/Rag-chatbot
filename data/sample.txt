@@ -1,0 +1,5 @@
+Retrieval Augmented Generation allows a language model
+to answer questions using external documents.
+
+LangChain helps connect document loading,
+vector databases, and language models together.
