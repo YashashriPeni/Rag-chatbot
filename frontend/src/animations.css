@@ -1,0 +1,83 @@
+/* ═══════════════════════════════════════════════════════════════
+   index.css  (or globals.css)
+   Add these keyframes + font import.
+   Your existing styles are untouched — just append this block.
+═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
+
+/* ── Keyframes used by Tailwind animate-[] utilities ─────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes cardUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes barGrow {
+  from { transform: scaleY(0); transform-origin: bottom; }
+  to   { transform: scaleY(1); }
+}
+
+/* VoiceOrb — listening bars */
+@keyframes barBounce {
+  0%, 100% { height: 5px;  }
+  50%       { height: 24px; }
+}
+
+/* VoiceOrb — ear wiggle */
+@keyframes earWiggle {
+  0%, 100% { transform: scale(1) rotate(0deg);  }
+  25%       { transform: scale(1.3) rotate(-10deg); }
+  75%       { transform: scale(1.1) rotate(8deg);  }
+}
+
+/* VoiceOrb — brain bounce */
+@keyframes brainBounce {
+  0%, 100% { transform: scale(1) rotate(0deg);  }
+  33%       { transform: scale(1.2) rotate(-5deg); }
+  66%       { transform: scale(0.9) rotate(5deg);  }
+}
+
+/* VoiceOrb — coloured dots pop */
+@keyframes dotPop {
+  0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}
+
+/* VoiceOrb — shimmer text */
+@keyframes shimmer {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1;   }
+}
+
+/* VoiceOrb — speaking wave */
+@keyframes waveBar {
+  0%, 100% { height: 3px;  }
+  50%       { height: 20px; }
+}
+
+/* Crisis button pulse */
+@keyframes crisisPulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(224, 120, 120, 0.4);  }
+  50%       { box-shadow: 0 4px 28px rgba(224, 120, 120, 0.65); }
+}
+
+/* Welcome orb float */
+@keyframes wOrb {
+  0%, 100% { transform: translateY(0);   }
+  50%       { transform: translateY(-7px); }
+}
