@@ -5,3 +5,6 @@ chromadb
 pypdf
 python-dotenv
 streamlit
+fastapi
+uvicorn
+python-dotenv
