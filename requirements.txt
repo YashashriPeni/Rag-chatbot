@@ -9,7 +9,7 @@ langchain-community
 langchain-google-genai
 langchain-ollama
 
-groq
+groq #fix redeploy
 vaderSentiment
 
 pypdf
