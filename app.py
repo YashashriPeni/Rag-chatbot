@@ -7,6 +7,13 @@ import uuid
 import random
 import re
 
+# ✅ NEW ADDITIONS
+from dotenv import load_dotenv
+from groq import Groq
+
+load_dotenv()
+USE_OLLAMA = False  # change to False when deploying
+
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_ollama import ChatOllama
@@ -270,6 +277,23 @@ llm = ChatOllama(
     temperature=0.35
 )
 
+# ✅ NEW FUNCTION
+def get_llm_response(prompt):
+
+    if USE_OLLAMA:
+        response = llm.invoke(prompt)
+        return response.content
+
+    else:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        return response.choices[0].message.content
+
 
 # ===============================
 # FASTAPI
@@ -399,7 +423,6 @@ def chat(query: Query):
     user_message = query.message
     normalized_message = normalize_text(user_message)
 
-    # 🔥 UPDATE DASHBOARD COUNTS
     dashboard_data["messages"] += 1
 
     if "stress" in normalized_message:
@@ -411,7 +434,6 @@ def chat(query: Query):
     if "sleep" in normalized_message:
         dashboard_data["sleep"] += 1
 
-    # SENTIMENT
     sentiment_scores = analyzer.polarity_scores(user_message)
 
     if sentiment_scores['compound'] >= 0.05:
@@ -488,8 +510,7 @@ Rules:
 Reply:
 """
 
-        response = llm.invoke(prompt)
-        answer = clean_response(response.content)
+        answer = clean_response(get_llm_response(prompt))
 
         if temp_level == "high":
             answer += " This temperature is quite high—please consider seeing a doctor."
@@ -518,8 +539,7 @@ User:
 Reply:
 """
 
-        response = llm.invoke(prompt)
-        answer = clean_response(response.content)
+        answer = clean_response(get_llm_response(prompt))
 
 
     else:
@@ -543,8 +563,7 @@ Rules:
 Reply:
 """
 
-        response = llm.invoke(prompt)
-        answer = clean_response(response.content)
+        answer = clean_response(get_llm_response(prompt))
 
 
     add_memory(memory, user_message, answer)

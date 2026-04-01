@@ -5,8 +5,11 @@ const COLORS = ["#10B981", "#EF4444"];
 
 function StudentOverview({ analysis }) {
 
-  // 🔥 SAME AS BEFORE (no change)
-  const [dashboardData, setDashboardData] = useState(null);
+  // ✅ FIXED: load from localStorage instead of null
+  const [dashboardData, setDashboardData] = useState(() => {
+    const saved = localStorage.getItem("dashboardData");
+    return saved ? JSON.parse(saved) : null;
+  });
 
   useEffect(() => {
     fetchDashboard();
@@ -22,13 +25,16 @@ function StudentOverview({ analysis }) {
     try {
       const res = await fetch("http://127.0.0.1:8000/dashboard");
       const data = await res.json();
+
+      // ✅ SAVE + UPDATE
       setDashboardData(data);
+      localStorage.setItem("dashboardData", JSON.stringify(data));
+
     } catch (err) {
       console.error("Overview error:", err);
     }
   };
 
-  // 🔹 SAME LOGIC (no change)
   const healthScore =
     analysis?.score ??
     dashboardData?.health_score ??
@@ -52,7 +58,6 @@ function StudentOverview({ analysis }) {
     analysis?.status ??
     (dashboardData ? "Live Updating 💚" : "Stable & Improving 💚");
 
-  // 🔥 🔥 ONLY THIS PART CHANGED (SMART INSIGHTS)
   const insights =
     analysis?.insights ??
     (() => {
@@ -100,7 +105,6 @@ function StudentOverview({ analysis }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-100 to-purple-200 p-10">
 
-      {/* Header */}
       <div className="mb-10">
         <h1 className="text-4xl font-bold">
           🌟 Student Wellness Overview
@@ -110,7 +114,6 @@ function StudentOverview({ analysis }) {
         </p>
       </div>
 
-      {/* Health Score Section */}
       <div className="bg-white rounded-3xl shadow-xl p-8 mb-10 flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold mb-2">
@@ -146,7 +149,6 @@ function StudentOverview({ analysis }) {
         </div>
       </div>
 
-      {/* AI Insights */}
       <div className="bg-white rounded-3xl shadow-lg p-8 mb-10">
         <h2 className="text-2xl font-semibold mb-4">
           💡 AI Health Insights
@@ -159,7 +161,6 @@ function StudentOverview({ analysis }) {
         </ul>
       </div>
 
-      {/* Hospital Snapshot */}
       <div className="bg-white rounded-3xl shadow-lg p-8">
         <h2 className="text-2xl font-semibold mb-4">
           🏥 Arundhati Hospital Snapshot

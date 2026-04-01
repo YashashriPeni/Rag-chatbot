@@ -16,13 +16,21 @@ const COLORS = ["#6366F1", "#EF4444", "#10B981", "#F59E0B"];
 
 function StudentDashboard() {
 
-  // 🔥 NEW STATE
-  const [dashboardData, setDashboardData] = useState({
-    health_score: 0,
-    stress_mentions: 0,
-    headaches: 0,
-    sleep_issues: 0,
-    alerts: []
+  // ✅ FIXED: localStorage persistence
+  const [dashboardData, setDashboardData] = useState(() => {
+    const saved = localStorage.getItem("dashboardData");
+    return saved
+      ? JSON.parse(saved)
+      : {
+          health_score: 0,
+          stress_mentions: 0,
+          headaches: 0,
+          sleep_issues: 0,
+          messages: 0,
+          positive: 0,
+          negative: 0,
+          alerts: []
+        };
   });
 
   // 🔥 FETCH DASHBOARD DATA
@@ -40,7 +48,11 @@ function StudentDashboard() {
     try {
       const res = await fetch("http://127.0.0.1:8000/dashboard");
       const data = await res.json();
+
+      // ✅ update + persist
       setDashboardData(data);
+      localStorage.setItem("dashboardData", JSON.stringify(data));
+
     } catch (err) {
       console.error("Dashboard error:", err);
     }
@@ -67,7 +79,7 @@ function StudentDashboard() {
         📊 Student Health Analytics
       </h1>
 
-      {/* 🔥 SUMMARY CARDS (NOW DYNAMIC) */}
+      {/* 🔥 SUMMARY CARDS */}
       <div className="grid grid-cols-4 gap-6 mb-10">
         <Card title="Health Score" value={`${dashboardData.health_score}%`} />
         <Card title="Stress Mentions" value={dashboardData.stress_mentions} />
