@@ -215,7 +215,7 @@ def classify_temperature(temp):
     else:
         return "high"
 
-
+LAZY_LOADED = False
 # ===============================
 # VECTOR DATABASE
 # ===============================
@@ -253,20 +253,26 @@ def build_vector_store():
     return db
 
 
-if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
+db = None
+retriever = None
 
-    db = build_vector_store()
+def lazy_load_db():
+    global db, retriever, LAZY_LOADED
 
-else:
+    if LAZY_LOADED:
+        return
 
-    db = Chroma(
-        persist_directory=DB_PATH,
-        embedding_function=embedding_function
-    )
+    if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
+        db = build_vector_store()
+    else:
+        db = Chroma(
+            persist_directory=DB_PATH,
+            embedding_function=embedding_function
+        )
 
+    retriever = db.as_retriever(search_kwargs={"k":3})
 
-retriever = db.as_retriever(search_kwargs={"k":3})
-
+    LAZY_LOADED = True
 
 # ===============================
 # LLM
@@ -419,6 +425,8 @@ triage_questions = {
 
 @app.post("/chat")
 def chat(query: Query):
+
+    lazy_load_db()
 
     user_message = query.message
     normalized_message = normalize_text(user_message)
