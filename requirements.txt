@@ -1,10 +1,15 @@
 fastapi
 uvicorn
 python-dotenv
-chromadb
-sentence-transformers
+
 langchain
 langchain-community
+langchain-core
 langchain-ollama
+
+chromadb
+
 groq
 vaderSentiment
+
+sentence-transformers
