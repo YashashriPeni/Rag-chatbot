@@ -7,20 +7,16 @@ import uuid
 import random
 import re
 
-# ✅ NEW ADDITIONS
 from dotenv import load_dotenv
 from groq import Groq
 
 load_dotenv()
-USE_OLLAMA = False  # change to False when deploying
 
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import SentenceTransformerEmbeddings
-from langchain_ollama import ChatOllama
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# ✅ NEW: SENTIMENT IMPORT
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 
@@ -275,30 +271,18 @@ def lazy_load_db():
     LAZY_LOADED = True
 
 # ===============================
-# LLM
+# LLM - GROQ ONLY
 # ===============================
 
-llm = ChatOllama(
-    model="phi3",
-    temperature=0.35
-)
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# ✅ NEW FUNCTION
 def get_llm_response(prompt):
-
-    if USE_OLLAMA:
-        response = llm.invoke(prompt)
-        return response.content
-
-    else:
-        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return response.choices[0].message.content
+    response = groq_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.35
+    )
+    return response.choices[0].message.content
 
 
 # ===============================

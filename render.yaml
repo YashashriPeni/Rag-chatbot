@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: health-assistant
+    env: docker
+    plan: free
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
