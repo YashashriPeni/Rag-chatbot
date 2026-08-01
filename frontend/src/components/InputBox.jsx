@@ -1,4 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+
+// ✅ Capture native fetch BEFORE any Chrome extension can override window.fetch
+const nativeFetch = window.fetch.bind(window);
+
+// ✅ Priority-ordered list of soothing natural female voices
+const PREFERRED_FEMALE_VOICES = [
+  "Samantha",          // macOS / iOS — warm, natural
+  "Google UK English Female",
+  "Microsoft Zira",    // Windows
+  "Microsoft Jenny",   // Windows 11
+  "Karen",             // macOS
+  "Moira",             // macOS Irish English
+  "Victoria",          // macOS
+  "Fiona",             // macOS Scottish
+  "Martha",            // Windows
+];
+
+function pickBestVoice(voices) {
+  for (const name of PREFERRED_FEMALE_VOICES) {
+    const v = voices.find(v => v.name === name);
+    if (v) return v;
+  }
+  // Fallback: any en-US or en-GB female-named voice
+  const fallback = voices.find(v =>
+    (v.lang === "en-US" || v.lang === "en-GB" || v.lang === "en-IN") &&
+    /female|woman|girl|zira|jenny|samantha|karen|moira|fiona|victoria|hazel/i.test(v.name)
+  );
+  return fallback || voices.find(v => v.lang.startsWith("en")) || voices[0];
+}
 
 function InputBox({
   messages,
@@ -6,204 +35,264 @@ function InputBox({
   voiceState,
   setVoiceState,
   conversationId,
-  setConversationId
+  setConversationId,
+  stopSpeechRef,
 }) {
-  const [input, setInput] = useState("");
-  const [voices, setVoices] = useState([]);
+  const [input, setInput]       = useState("");
+  const [voices, setVoices]     = useState([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused]   = useState(false);
 
+  // Always-fresh refs — avoids stale closures in async / voice callbacks
+  const messagesRef       = useRef(messages);
+  const conversationIdRef = useRef(conversationId);
+  const voiceStateRef     = useRef(voiceState);
+
+  useEffect(() => { messagesRef.current       = messages;       }, [messages]);
+  useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+  useEffect(() => { voiceStateRef.current     = voiceState;     }, [voiceState]);
+
+  // Load voices (async on some browsers)
   useEffect(() => {
-    const loadVoices = () => {
-      setVoices(speechSynthesis.getVoices());
-    };
-
-    loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
+    const load = () => setVoices(speechSynthesis.getVoices());
+    load();
+    speechSynthesis.onvoiceschanged = load;
   }, []);
 
-  // 🔊 SPEAK FUNCTION (UPDATED)
-  const speak = (text) => {
+  // ─── SPEAK — soothing female voice ────────────────────────────────
+  const speak = useCallback((text) => {
     if (!text) return;
 
-    const voice =
-      voices.find(v => v.name.toLowerCase().includes("heera")) ||
-      voices.find(v => v.lang === "en-IN");
-
+    const voice = pickBestVoice(voices);
     const utterance = new SpeechSynthesisUtterance(text);
-
     if (voice) utterance.voice = voice;
 
-    utterance.pitch = 1.3;
-    utterance.rate = 0.95;
+    // Natural, soothing settings
+    utterance.pitch = 1.05;   // Slightly warm, not too high
+    utterance.rate  = 0.92;   // Calm, unhurried
+    utterance.volume = 1;
 
-    // 🔥 IMPORTANT STATE HANDLING
     utterance.onstart = () => {
       setIsSpeaking(true);
       setIsPaused(false);
+      setVoiceState("speaking");
     };
-
     utterance.onend = () => {
       setIsSpeaking(false);
       setIsPaused(false);
+      setVoiceState("idle");
     };
-
     utterance.onerror = () => {
       setIsSpeaking(false);
       setIsPaused(false);
+      setVoiceState("idle");
     };
 
-    speechSynthesis.cancel(); // clear previous
-    speechSynthesis.speak(utterance);
-  };
+    speechSynthesis.cancel();
+    // Small delay so cancel() fully clears before new utterance
+    setTimeout(() => speechSynthesis.speak(utterance), 80);
+  }, [voices, setVoiceState]);
 
-  // ⏸ PAUSE
+  // ─── PAUSE / RESUME / STOP ─────────────────────────────────────────
   const pauseSpeech = () => {
     if (speechSynthesis.speaking && !speechSynthesis.paused) {
       speechSynthesis.pause();
       setIsPaused(true);
     }
   };
-
-  // ▶ RESUME
   const resumeSpeech = () => {
     if (speechSynthesis.paused) {
       speechSynthesis.resume();
       setIsPaused(false);
     }
   };
-
-  // ⛔ STOP
-  const stopSpeech = () => {
+  const stopSpeech = useCallback(() => {
     speechSynthesis.cancel();
     setIsSpeaking(false);
     setIsPaused(false);
-  };
+    setVoiceState("idle");
+  }, [setVoiceState]);
 
-  const sendMessage = async (textOverride = null) => {
-    const text = textOverride || input;
+  // Expose stopSpeech so VoiceOrb Stop button works from ChatPage
+  useEffect(() => {
+    if (stopSpeechRef) stopSpeechRef.current = stopSpeech;
+  }, [stopSpeech, stopSpeechRef]);
 
-    if (!text || !text.trim()) return;
+  // ─── SEND MESSAGE ──────────────────────────────────────────────────
+  const sendMessage = useCallback(async (textOverride = null) => {
+    const text = (textOverride || input).trim();
+    if (!text) return;
 
-    const userMessage = {
-      role: "user",
-      content: text
-    };
-
-    const updatedMessages = Array.isArray(messages)
-      ? [...messages, userMessage]
-      : [userMessage];
+    const currentMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+    const userMessage    = { role: "user", content: text };
+    const updatedMessages = [...currentMessages, userMessage];
 
     setMessages(updatedMessages);
     setInput("");
+    setVoiceState("thinking");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/chat", {
+      const res = await nativeFetch("http://127.0.0.1:8000/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          conversation_id: conversationId
-        })
+          conversation_id: conversationIdRef.current,
+        }),
       });
 
       const data = await res.json();
-
-      const botMessage = {
-        role: "assistant",
-        content: data?.reply || "No response from server"
-      };
-
+      const botMessage = { role: "assistant", content: data?.reply || "No response from server" };
       const finalMessages = [...updatedMessages, botMessage];
-
-      if (!Array.isArray(finalMessages)) {
-        console.error("Messages not array:", finalMessages);
-        return;
-      }
-
       setMessages(finalMessages);
 
-      if (data?.conversation_id) {
-        setConversationId(data.conversation_id);
-      }
-
-      if (data?.reply) {
-        speak(data.reply);
-      }
+      if (data?.conversation_id) setConversationId(data.conversation_id);
+      if (data?.reply) speak(data.reply);
+      else             setVoiceState("idle");
 
     } catch (err) {
       console.error("API ERROR:", err);
+      setVoiceState("idle");
+      setMessages([...updatedMessages, {
+        role: "assistant",
+        content: "⚠️ Could not reach the server. Is the backend running on port 8000?",
+      }]);
     }
-  };
+  }, [input, setMessages, setConversationId, setVoiceState, speak]);
 
+  // ─── VOICE INPUT ───────────────────────────────────────────────────
   const startListening = () => {
-    const recognition = new window.webkitSpeechRecognition();
-    recognition.lang = "en-IN";
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert("Voice input requires Chrome or Edge browser.");
+      return;
+    }
 
-    recognition.onstart = () => setVoiceState("listening");
+    speechSynthesis.cancel();
+    setIsSpeaking(false);
 
-    recognition.onresult = (e) => {
-      const text = e.results[0][0].transcript;
-      sendMessage(text);
+    const rec = new SR();
+    rec.lang = "en-IN";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+
+    rec.onstart  = ()  => setVoiceState("listening");
+    rec.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setVoiceState("thinking");
+      sendMessage(transcript);
+    };
+    rec.onerror = (e) => {
+      console.error("Recognition error:", e.error);
+      setVoiceState("idle");
+      if (e.error === "not-allowed")
+        alert("Microphone permission denied. Please allow mic access and try again.");
+    };
+    rec.onend = () => {
+      if (voiceStateRef.current === "listening") setVoiceState("idle");
     };
 
-    recognition.onend = () => setVoiceState("idle");
-
-    recognition.start();
+    rec.start();
   };
 
-  return (
-    <div className="p-4 border-t flex flex-wrap gap-3 items-center">
+  // ─── RENDER ────────────────────────────────────────────────────────
+  const busy = voiceState === "listening" || voiceState === "thinking";
 
-      {/* INPUT */}
+  return (
+    <div style={{
+      display:"flex", alignItems:"center", gap:8,
+      padding:"12px 16px",
+      borderTop:"1px solid var(--border)",
+      background:"rgba(17,24,39,0.6)",
+      backdropFilter:"blur(16px)",
+    }}>
+      {/* Text input */}
       <input
         value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-        className="flex-1 border rounded-xl px-4 py-2"
-        placeholder="Talk to me..."
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+        placeholder="Type a message or use the mic…"
+        disabled={busy}
+        className="input-field"
+        style={{ flex:1, padding:"11px 16px", fontSize:14, opacity: busy ? 0.6 : 1 }}
       />
 
-      {/* 🎤 */}
-      <button onClick={startListening}>🎤</button>
+      {/* Mic button */}
+      <button
+        onClick={startListening}
+        disabled={busy}
+        title="Voice input"
+        style={{
+          width:42, height:42, borderRadius:"50%", border:"none",
+          background: busy ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.15)",
+          color: "#a78bfa", fontSize:18, cursor: busy ? "not-allowed" : "pointer",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          transition:"all .2s", flexShrink:0,
+          opacity: busy ? 0.5 : 1,
+          boxShadow: busy ? "none" : "0 0 12px rgba(139,92,246,0.2)",
+        }}
+        onMouseEnter={e => { if (!busy) e.currentTarget.style.background = "rgba(139,92,246,0.3)"; }}
+        onMouseLeave={e => { e.currentTarget.style.background = busy ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.15)"; }}
+      >🎤</button>
 
-      {/* ⏸ */}
+      {/* Pause */}
       <button
         onClick={pauseSpeech}
         disabled={!isSpeaking || isPaused}
-        className="bg-yellow-400 px-3 py-1 rounded-lg text-sm disabled:opacity-40"
-      >
-        Pause
-      </button>
+        title="Pause speech"
+        style={{
+          width:36, height:36, borderRadius:8, border:"1px solid var(--border)",
+          background:"transparent", color:"var(--text-secondary)", fontSize:14,
+          cursor: (!isSpeaking || isPaused) ? "not-allowed" : "pointer",
+          opacity: (!isSpeaking || isPaused) ? 0.35 : 1,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          transition:"all .2s", flexShrink:0,
+        }}
+      >⏸</button>
 
-      {/* ▶ */}
+      {/* Resume */}
       <button
         onClick={resumeSpeech}
         disabled={!isPaused}
-        className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm disabled:opacity-40"
-      >
-        Resume
-      </button>
+        title="Resume speech"
+        style={{
+          width:36, height:36, borderRadius:8, border:"1px solid var(--border)",
+          background:"transparent", color:"var(--text-secondary)", fontSize:14,
+          cursor: !isPaused ? "not-allowed" : "pointer",
+          opacity: !isPaused ? 0.35 : 1,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          transition:"all .2s", flexShrink:0,
+        }}
+      >▶</button>
 
-      {/* ⛔ */}
+      {/* Stop */}
       <button
         onClick={stopSpeech}
         disabled={!isSpeaking}
-        className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm disabled:opacity-40"
-      >
-        Stop
-      </button>
+        title="Stop speech"
+        style={{
+          width:36, height:36, borderRadius:8, border:"1px solid rgba(248,113,113,0.25)",
+          background:"transparent", color:"#f87171", fontSize:14,
+          cursor: !isSpeaking ? "not-allowed" : "pointer",
+          opacity: !isSpeaking ? 0.35 : 1,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          transition:"all .2s", flexShrink:0,
+        }}
+      >⏹</button>
 
-      {/* SEND */}
+      {/* Send */}
       <button
         onClick={() => sendMessage()}
-        className="bg-green-500 text-white px-4 rounded-xl"
+        disabled={!input.trim() || busy}
+        className="btn btn-primary"
+        style={{
+          height:42, padding:"0 20px", fontSize:14, flexShrink:0,
+          opacity: (!input.trim() || busy) ? 0.45 : 1,
+          cursor: (!input.trim() || busy) ? "not-allowed" : "pointer",
+        }}
       >
-        Send
+        Send ↑
       </button>
-
     </div>
   );
 }

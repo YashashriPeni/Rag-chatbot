@@ -1,159 +1,22 @@
-import { useState } from "react";
-import { auth, provider } from "../firebase";
-import {
-  signInWithPopup,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail
-} from "firebase/auth";
+import { useState } from 'react';
 
 export default function LoginPage({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  // 🔐 Google Login
-  const handleGoogleLogin = async () => {
-    setError("");
-    try {
-      const result = await signInWithPopup(auth, provider);
-      onLogin(result.user.displayName || result.user.email);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  // 🆕 Signup
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      setMessage("Account created successfully!");
-      onLogin(result.user.email);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  // 🔓 Login
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-
-    try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      onLogin(result.user.email);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  // 🔁 Reset Password
-  const handleReset = async () => {
-    setError("");
-    setMessage("");
-
-    if (!email) {
-      setError("Please enter your email first");
-      return;
-    }
-
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setMessage("Password reset email sent!");
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
+  const [name, setName] = useState('');
+  const [focused, setFocused] = useState(false);
+  const submit = () => { const t = name.trim(); if (t) onLogin(t); };
   return (
-    <div className="h-screen flex items-center justify-center bg-gray-50">
-      
-      <div className="bg-white p-8 rounded-2xl shadow-lg w-96 space-y-5 border">
-
-        {/* 🏥 Header */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-indigo-600">
-            🏥 Arundhati Health System
-          </h1>
-          <p className="text-gray-500 text-sm">
-            Student Health Portal Login
-          </p>
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'linear-gradient(135deg,#0a0f1e 0%,#0f1729 60%,#0a0f1e 100%)', position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', width:500, height:500, borderRadius:'50%', background:'radial-gradient(circle,rgba(139,92,246,0.12),transparent 70%)', top:'-10%', left:'10%', filter:'blur(60px)', pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', width:400, height:400, borderRadius:'50%', background:'radial-gradient(circle,rgba(6,182,212,0.08),transparent 70%)', bottom:'-10%', right:'10%', filter:'blur(60px)', pointerEvents:'none' }}/>
+      <div className="glass animate-fadeUp" style={{ width:'100%', maxWidth:420, borderRadius:24, padding:'48px 40px', boxShadow:'0 24px 64px rgba(0,0,0,0.5)', display:'flex', flexDirection:'column', alignItems:'center', gap:28 }}>
+        <div className="animate-float" style={{ width:72, height:72, borderRadius:'50%', background:'linear-gradient(135deg,#8b5cf6,#06b6d4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, boxShadow:'0 0 32px rgba(139,92,246,0.4)' }}>🏥</div>
+        <div style={{ textAlign:'center' }}>
+          <h1 style={{ fontFamily:"'Sora',sans-serif", fontSize:26, fontWeight:700, color:'var(--text-primary)', marginBottom:6 }}>Welcome to <span className="gradient-text">Arundhati</span></h1>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6 }}>Your personal student health companion.<br/>Tell me your name to get started.</p>
         </div>
-
-        {/* 🔴 Error Message */}
-        {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* 🟢 Success Message */}
-        {message && (
-          <div className="bg-green-100 text-green-700 p-2 rounded text-sm">
-            {message}
-          </div>
-        )}
-
-        {/* 🔐 Google Login */}
-        <button
-          onClick={handleGoogleLogin}
-          className="w-full border border-gray-300 py-2 rounded-lg hover:bg-gray-100 transition font-medium"
-        >
-          Continue with Google
-        </button>
-
-        <div className="text-center text-gray-400 text-sm">OR</div>
-
-        {/* 📧 Email */}
-        <input
-          type="email"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        />
-
-        {/* 🔑 Password */}
-        <input
-          type="password"
-          placeholder="Enter your password (min 6 chars)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        />
-
-        {/* 🔓 Login */}
-        <button
-          onClick={handleLogin}
-          className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium"
-        >
-          Login
-        </button>
-
-        {/* 🆕 Signup */}
-        <button
-          onClick={handleSignup}
-          className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-medium"
-        >
-          Create Account
-        </button>
-
-        {/* 🔁 Forgot Password */}
-        <div className="text-center">
-          <button
-            onClick={handleReset}
-            className="text-sm text-indigo-600 hover:underline"
-          >
-            Forgot Password?
-          </button>
-        </div>
-
+        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key==='Enter' && submit()} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder="Your name…" className="input-field" style={{ fontSize:15, boxShadow: focused ? '0 0 0 3px rgba(139,92,246,0.15)' : 'none', width:'100%' }}/>
+        <button onClick={submit} disabled={!name.trim()} className="btn btn-primary" style={{ width:'100%', fontSize:15, padding:'13px', opacity: name.trim() ? 1 : 0.45, cursor: name.trim() ? 'pointer' : 'not-allowed' }}>Enter Chat ✨</button>
+        <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center' }}>No account needed · Fully private</p>
       </div>
     </div>
   );

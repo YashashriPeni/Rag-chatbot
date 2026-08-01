@@ -1,41 +1,35 @@
-import { useEffect, useRef } from "react";
-import MessageBubble from "./MessageBubble";
+import { useEffect, useRef } from 'react';
+import MessageBubble from './MessageBubble';
 
 export default function ChatWindow({ messages }) {
-
-  console.log("MESSAGES:", messages);
-
   const bottomRef = useRef(null);
 
-  // ✅ AUTO SCROLL
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ SAFETY FIX (keep this)
-  const safeMessages = Array.isArray(messages)
-    ? messages.filter(m => m && m.content)
-    : [];
+  const safe = (messages || []).filter(m => m && m.content);
 
-  if (safeMessages.length === 0) {
-    return <p className="text-gray-400">No messages yet</p>;
+  if (!safe.length) {
+    return (
+      <div style={{
+        display:'flex', flexDirection:'column', alignItems:'center',
+        justifyContent:'center', height:'100%', gap:16, opacity:.5,
+      }}>
+        <div className="animate-float" style={{ fontSize:48 }}>💬</div>
+        <p style={{ fontSize:14, color:'var(--text-muted)', fontWeight:500 }}>
+          Start a conversation…
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-
-      {safeMessages.map((msg, index) => (
-        <div key={index}>
-          <MessageBubble
-            role={msg.role || "assistant"}
-            content={msg.content || ""}
-          />
-        </div>
+    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+      {safe.map((msg, i) => (
+        <MessageBubble key={i} message={msg} index={i} />
       ))}
-
-      {/* 🔥 THIS IS THE MAGIC LINE */}
       <div ref={bottomRef} />
-
     </div>
   );
 }

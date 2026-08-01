@@ -1,233 +1,158 @@
 import { useState, useEffect } from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid
-} from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-const COLORS = ["#6366F1", "#EF4444", "#10B981", "#F59E0B"];
+const nativeFetch = window.fetch.bind(window);
 
-function StudentDashboard() {
+const GAUGE_COLORS = ["#8b5cf6","#06b6d4","#10b981","#f59e0b","#f87171"];
 
-  // ✅ FIXED: localStorage persistence
-  const [dashboardData, setDashboardData] = useState(() => {
-    const saved = localStorage.getItem("dashboardData");
-    return saved
-      ? JSON.parse(saved)
-      : {
-          health_score: 0,
-          stress_mentions: 0,
-          headaches: 0,
-          sleep_issues: 0,
-          messages: 0,
-          positive: 0,
-          negative: 0,
-          alerts: []
-        };
+function StatCard({ icon, label, value, color="#8b5cf6", sub }) {
+  return (
+    <div className="glass animate-fadeUp" style={{
+      borderRadius:16, padding:"20px 22px",
+      display:"flex", flexDirection:"column", gap:6,
+      border:"1px solid var(--border)",
+      transition:"transform .2s, box-shadow .2s",
+    }}
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="var(--shadow-glow)";}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}
+    >
+      <div style={{ fontSize:24 }}>{icon}</div>
+      <div style={{ fontSize:28, fontWeight:700, color, fontFamily:"'Sora',sans-serif" }}>{value}</div>
+      <div style={{ fontSize:13, color:"var(--text-secondary)", fontWeight:500 }}>{label}</div>
+      {sub && <div style={{ fontSize:11, color:"var(--text-muted)" }}>{sub}</div>}
+    </div>
+  );
+}
+
+export default function StudentDashboard({ analysis }) {
+  const [data, setData] = useState({
+    health_score:100, stress_mentions:0, headaches:0,
+    sleep_issues:0, messages:0, positive:0, negative:0, alerts:[],
   });
 
-  // 🔥 FETCH DASHBOARD DATA
   useEffect(() => {
-    fetchDashboard();
-
-    const interval = setInterval(() => {
-      fetchDashboard();
-    }, 3000);
-
-    return () => clearInterval(interval);
+    const fetch = () =>
+      nativeFetch("http://127.0.0.1:8000/dashboard")
+        .then(r => r.json())
+        .then(setData)
+        .catch(() => {});
+    fetch();
+    const id = setInterval(fetch, 3000);
+    return () => clearInterval(id);
   }, []);
 
-  const fetchDashboard = async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:8000/dashboard");
-      const data = await res.json();
+  const score = data.health_score ?? 100;
+  const scoreColor = score > 70 ? "#10b981" : score > 40 ? "#f59e0b" : "#f87171";
 
-      // ✅ update + persist
-      setDashboardData(data);
-      localStorage.setItem("dashboardData", JSON.stringify(data));
-
-    } catch (err) {
-      console.error("Dashboard error:", err);
-    }
-  };
-
-  // 🔥 DYNAMIC DATA FOR CHARTS
-  const symptomData = [
-    { name: "Stress", value: dashboardData.stress_mentions },
-    { name: "Headache", value: dashboardData.headaches },
-    { name: "Sleep Issues", value: dashboardData.sleep_issues }
+  const pieData = [
+    { name:"Positive", value: Math.max(data.positive, 1) },
+    { name:"Negative", value: Math.max(data.negative, 1) },
+    { name:"Neutral",  value: Math.max(data.messages - data.positive - data.negative, 1) },
   ];
+  const pieColors = ["#10b981","#f87171","#94a3b8"];
 
-  const weeklyData = [
-    { day: "Mon", cases: dashboardData.stress_mentions },
-    { day: "Tue", cases: dashboardData.headaches },
-    { day: "Wed", cases: dashboardData.sleep_issues },
-    { day: "Thu", cases: dashboardData.messages || 0 },
-    { day: "Fri", cases: dashboardData.negative || 0 }
+  const barData = [
+    { name:"Stress",   value: data.stress_mentions },
+    { name:"Headache", value: data.headaches },
+    { name:"Sleep",    value: data.sleep_issues },
+    { name:"Positive", value: data.positive },
+    { name:"Negative", value: data.negative },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold mb-8">
-        📊 Student Health Analytics
-      </h1>
+    <div style={{
+      height:"100%", overflowY:"auto",
+      padding:"24px", display:"flex", flexDirection:"column", gap:20,
+      background:"var(--bg-base)", position:"relative",
+    }}>
+      {/* Ambient glow */}
+      <div style={{ position:"absolute", width:400, height:400, borderRadius:"50%", pointerEvents:"none", background:"radial-gradient(circle,rgba(6,182,212,0.06),transparent 70%)", top:0, right:0, filter:"blur(60px)" }}/>
 
-      {/* 🔥 SUMMARY CARDS */}
-      <div className="grid grid-cols-4 gap-6 mb-10">
-        <Card title="Health Score" value={`${dashboardData.health_score}%`} />
-        <Card title="Stress Mentions" value={dashboardData.stress_mentions} />
-        <Card title="Headache Reports" value={dashboardData.headaches} />
-        <Card title="Sleep Issues" value={dashboardData.sleep_issues} />
+      {/* Header */}
+      <div>
+        <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:22, fontWeight:700, color:"var(--text-primary)", marginBottom:4 }}>
+          📊 Health <span className="gradient-text">Dashboard</span>
+        </h2>
+        <p style={{ fontSize:13, color:"var(--text-muted)" }}>Live analytics from your conversations · updates every 3s</p>
       </div>
 
-      {/* 🔥 ALERTS */}
-      <div className="mb-6">
-        {dashboardData.alerts.map((alert, index) => (
-          <div key={index} className="bg-red-100 text-red-700 p-2 rounded mb-2">
-            {alert}
+      {/* Alerts */}
+      {data.alerts?.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {data.alerts.map((a,i) => (
+            <div key={i} className="animate-fadeUp" style={{
+              padding:"11px 16px", borderRadius:12,
+              background:"rgba(248,113,113,0.08)", border:"1px solid rgba(248,113,113,0.25)",
+              fontSize:13, color:"#fca5a5", fontWeight:500,
+            }}>{a}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Health score + stat cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:14 }}>
+        <div className="glass animate-fadeUp" style={{
+          borderRadius:16, padding:"20px 22px", gridColumn:"span 1",
+          display:"flex", flexDirection:"column", gap:6,
+          border:"1px solid var(--border)",
+        }}>
+          <div style={{ fontSize:24 }}>❤️‍🩹</div>
+          <div style={{ fontSize:32, fontWeight:700, color:scoreColor, fontFamily:"'Sora',sans-serif" }}>{score}</div>
+          <div style={{ fontSize:13, color:"var(--text-secondary)", fontWeight:500 }}>Health Score</div>
+          <div style={{ height:4, borderRadius:99, background:"var(--border)", marginTop:4 }}>
+            <div style={{ height:"100%", borderRadius:99, background:scoreColor, width:`${score}%`, transition:"width 1s ease" }}/>
           </div>
-        ))}
+        </div>
+        <StatCard icon="💬" label="Total Messages"    value={data.messages}        color="#8b5cf6" />
+        <StatCard icon="😌" label="Positive Mood"     value={data.positive}        color="#10b981" />
+        <StatCard icon="😔" label="Negative Mood"     value={data.negative}        color="#f87171" />
+        <StatCard icon="😤" label="Stress Mentions"   value={data.stress_mentions} color="#f59e0b" />
+        <StatCard icon="🤕" label="Headache Reports"  value={data.headaches}       color="#a78bfa" />
+        <StatCard icon="😴" label="Sleep Issues"      value={data.sleep_issues}    color="#06b6d4" />
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-8 mb-12">
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="font-semibold mb-4">
-            Symptom Distribution
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
+      {/* Charts row */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        {/* Mood pie */}
+        <div className="glass" style={{ borderRadius:16, padding:"20px", border:"1px solid var(--border)" }}>
+          <h3 style={{ fontSize:14, fontWeight:600, color:"var(--text-primary)", marginBottom:16 }}>😊 Mood Distribution</h3>
+          <ResponsiveContainer width="100%" height={180}>
             <PieChart>
-              <Pie
-                data={symptomData}
-                dataKey="value"
-                outerRadius={100}
-                label
-              >
-                {symptomData.map((entry, index) => (
-                  <Cell key={index} fill={COLORS[index]} />
-                ))}
+              <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} innerRadius={40} dataKey="value" paddingAngle={3}>
+                {pieData.map((_,i) => <Cell key={i} fill={pieColors[i]} />)}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                contentStyle={{ background:"var(--bg-surface)", border:"1px solid var(--border)", borderRadius:10, color:"var(--text-primary)", fontSize:12 }}
+              />
             </PieChart>
           </ResponsiveContainer>
+          <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
+            {pieData.map((d,i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:"var(--text-secondary)" }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:pieColors[i] }}/>
+                {d.name}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="font-semibold mb-4">
-            Weekly Health Mentions
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={weeklyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="cases" fill="#6366F1" />
+        {/* Symptom bar */}
+        <div className="glass" style={{ borderRadius:16, padding:"20px", border:"1px solid var(--border)" }}>
+          <h3 style={{ fontSize:14, fontWeight:600, color:"var(--text-primary)", marginBottom:16 }}>📈 Symptom Frequency</h3>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={barData} barSize={24}>
+              <XAxis dataKey="name" tick={{ fill:"var(--text-muted)", fontSize:11 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip
+                contentStyle={{ background:"var(--bg-surface)", border:"1px solid var(--border)", borderRadius:10, color:"var(--text-primary)", fontSize:12 }}
+              />
+              <Bar dataKey="value" radius={[6,6,0,0]}>
+                {barData.map((_,i) => <Cell key={i} fill={GAUGE_COLORS[i % GAUGE_COLORS.length]} />)}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* ================= HOSPITAL SECTION (UNCHANGED) ================= */}
-
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
-          🏥 Arundhati Hospital Integration
-          <span className="text-sm bg-green-100 text-green-600 px-3 py-1 rounded-full">
-            Secure Sync Ready
-          </span>
-        </h2>
-
-        <div className="bg-white rounded-2xl shadow p-6 mb-8">
-          <h3 className="text-lg font-semibold mb-4">
-            🩺 Last Hospital Visit
-          </h3>
-          <div className="grid grid-cols-4 gap-6">
-            <Info label="Last Visit" value="12 Feb 2026" />
-            <Info label="Diagnosed Issue" value="Mild Dehydration" />
-            <Info label="Prescribed" value="ORS + Rest" />
-            <Info label="Follow-up Status" value="Pending" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h3 className="text-lg font-semibold mb-4">
-            📋 Recent Hospital Records
-          </h3>
-
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b text-gray-500 text-sm">
-                <th className="py-2">Date</th>
-                <th>Issue</th>
-                <th>Severity</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
-              <tr className="border-b">
-                <td className="py-2">Feb 12</td>
-                <td>Dehydration</td>
-                <td>
-                  <span className="bg-green-100 text-green-600 px-2 py-1 rounded-full text-xs">
-                    Low
-                  </span>
-                </td>
-                <td>Resolved</td>
-              </tr>
-
-              <tr className="border-b">
-                <td className="py-2">Jan 28</td>
-                <td>Migraine</td>
-                <td>
-                  <span className="bg-yellow-100 text-yellow-600 px-2 py-1 rounded-full text-xs">
-                    Medium
-                  </span>
-                </td>
-                <td>Ongoing</td>
-              </tr>
-
-              <tr>
-                <td className="py-2">Jan 10</td>
-                <td>Stress</td>
-                <td>
-                  <span className="bg-green-100 text-green-600 px-2 py-1 rounded-full text-xs">
-                    Low
-                  </span>
-                </td>
-                <td>Resolved</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
-
-function Card({ title, value }) {
-  return (
-    <div className="bg-white rounded-2xl shadow p-6">
-      <p className="text-gray-500 text-sm">{title}</p>
-      <p className="text-2xl font-bold">{value}</p>
-    </div>
-  );
-}
-
-function Info({ label, value }) {
-  return (
-    <div>
-      <p className="text-gray-500 text-sm">{label}</p>
-      <p className="font-semibold">{value}</p>
-    </div>
-  );
-}
-
-export default StudentDashboard;

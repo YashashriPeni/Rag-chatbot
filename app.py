@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 
 import os
 import uuid
@@ -302,7 +303,7 @@ app.add_middleware(
 
 class Query(BaseModel):
     message: str
-    conversation_id: str | None = None
+    conversation_id: Optional[str] = None
 
 
 # ===============================
