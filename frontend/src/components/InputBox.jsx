@@ -29,6 +29,13 @@ function pickBestVoice(voices) {
   return fallback || voices.find(v => v.lang.startsWith("en")) || voices[0];
 }
 
+function splitTextIntoSentences(text) {
+  if (!text) return [];
+  // Split on '.', '!', or '?' followed by whitespace, keeping the punctuation
+  const matches = text.match(/[^.!?]+[.!?]*/g) || [text];
+  return matches.map(s => s.trim()).filter(Boolean);
+}
+
 function InputBox({
   messages,
   setMessages,
@@ -43,6 +50,11 @@ function InputBox({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused]   = useState(false);
 
+  const chunksRef = useRef([]);
+  const currentChunkIndexRef = useRef(0);
+  const isPausedRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+
   // Always-fresh refs — avoids stale closures in async / voice callbacks
   const messagesRef       = useRef(messages);
   const conversationIdRef = useRef(conversationId);
@@ -52,6 +64,14 @@ function InputBox({
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
   useEffect(() => { voiceStateRef.current     = voiceState;     }, [voiceState]);
 
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
+
   // Load voices (async on some browsers)
   useEffect(() => {
     const load = () => setVoices(speechSynthesis.getVoices());
@@ -59,12 +79,22 @@ function InputBox({
     speechSynthesis.onvoiceschanged = load;
   }, []);
 
-  // ─── SPEAK — soothing female voice ────────────────────────────────
-  const speak = useCallback((text) => {
-    if (!text) return;
+  // ─── PLAY NEXT CHUNK ────────────────────────────────────────────────
+  const playNextChunk = useCallback(() => {
+    if (isPausedRef.current) {
+      return;
+    }
 
+    if (currentChunkIndexRef.current >= chunksRef.current.length) {
+      setIsSpeaking(false);
+      setIsPaused(false);
+      setVoiceState("idle");
+      return;
+    }
+
+    const sentence = chunksRef.current[currentChunkIndexRef.current];
     const voice = pickBestVoice(voices);
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(sentence);
     if (voice) utterance.voice = voice;
 
     // Natural, soothing settings
@@ -74,42 +104,80 @@ function InputBox({
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      setIsPaused(false);
       setVoiceState("speaking");
     };
+
     utterance.onend = () => {
-      setIsSpeaking(false);
-      setIsPaused(false);
-      setVoiceState("idle");
+      // If we are currently paused or stopped, don't trigger the next chunk
+      if (isPausedRef.current || !isSpeakingRef.current) {
+        return;
+      }
+      currentChunkIndexRef.current += 1;
+      playNextChunk();
     };
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setIsPaused(false);
-      setVoiceState("idle");
+
+    utterance.onerror = (e) => {
+      // Chrome triggers onerror with error 'interrupted' when speechSynthesis.cancel() is called.
+      // If it was paused or stopped, do not skip the chunk or crash.
+      if (isPausedRef.current || !isSpeakingRef.current) {
+        return;
+      }
+      // Otherwise, skip the error chunk and continue
+      currentChunkIndexRef.current += 1;
+      playNextChunk();
     };
 
     speechSynthesis.cancel();
-    // Small delay so cancel() fully clears before new utterance
-    setTimeout(() => speechSynthesis.speak(utterance), 80);
+    setTimeout(() => {
+      // Double check state hasn't changed during the timeout
+      if (!isPausedRef.current && isSpeakingRef.current) {
+        speechSynthesis.speak(utterance);
+      }
+    }, 50);
   }, [voices, setVoiceState]);
+
+  // ─── SPEAK — soothing female voice ────────────────────────────────
+  const speak = useCallback((text) => {
+    if (!text) return;
+
+    // Split text into sentences
+    const sentences = splitTextIntoSentences(text);
+    if (sentences.length === 0) return;
+
+    chunksRef.current = sentences;
+    currentChunkIndexRef.current = 0;
+    
+    isSpeakingRef.current = true;
+    isPausedRef.current = false;
+    setIsSpeaking(true);
+    setIsPaused(false);
+
+    playNextChunk();
+  }, [playNextChunk]);
 
   // ─── PAUSE / RESUME / STOP ─────────────────────────────────────────
   const pauseSpeech = () => {
-    if (speechSynthesis.speaking && !speechSynthesis.paused) {
-      speechSynthesis.pause();
+    if (isSpeaking && !isPaused) {
+      isPausedRef.current = true;
       setIsPaused(true);
+      speechSynthesis.cancel(); // Cancel current speaking chunk
     }
   };
+
   const resumeSpeech = () => {
-    if (speechSynthesis.paused) {
-      speechSynthesis.resume();
+    if (isPaused) {
+      isPausedRef.current = false;
       setIsPaused(false);
+      playNextChunk();
     }
   };
+
   const stopSpeech = useCallback(() => {
-    speechSynthesis.cancel();
+    isSpeakingRef.current = false;
+    isPausedRef.current = false;
     setIsSpeaking(false);
     setIsPaused(false);
+    speechSynthesis.cancel();
     setVoiceState("idle");
   }, [setVoiceState]);
 
